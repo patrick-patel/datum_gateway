@@ -117,6 +117,8 @@ const T_DATUM_CONFIG_ITEM datum_config_options[] = {
 		.required = false, .ptr = &datum_config.coinbase_unique_id, 		.default_int = 4242 },
 	{ .var_type = DATUM_CONF_STRING, 	.category = "mining", 		.name = "save_submitblocks_dir",	.description = "Directory to save all submitted blocks to as submitblock JSON files",
 		.required = false, .ptr = datum_config.mining_save_submitblocks_dir,			.default_string[0] = "", .max_string_len = sizeof(datum_config.mining_save_submitblocks_dir) },
+	{ .var_type = DATUM_CONF_STRING, 	.category = "mining", 		.name = "address_split_json",	.description = "Path to JSON file with address-based split configurations",
+		.required = false, .ptr = datum_config.mining_address_split_json,			.default_string[0] = "", .max_string_len = sizeof(datum_config.mining_address_split_json) },
 	
 	// API/dashboard
 	{ .var_type = DATUM_CONF_STRING, 	.category = "api",	 		.name = "admin_password",			.description = "API password for actions/changes (username 'admin'; disabled if blank)",

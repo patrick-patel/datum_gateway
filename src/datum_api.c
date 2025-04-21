@@ -58,6 +58,7 @@
 #include "datum_protocol.h"
 
 #include "web_resources.h"
+#include "datum_address_split.h"
 
 const char * const homepage_html_end = "</body></html>";
 
@@ -1192,6 +1193,21 @@ bool datum_api_config_set(const char * const key, const char * const val, struct
 		}
 		datum_config.coinbase_unique_id = val_int;
 		datum_api_json_modify_new("mining", "coinbase_unique_id", json_integer(val_int));
+	} else if (0 == strcmp(key, "mining_address_split_json")) {
+		if (0 == strcmp(val, datum_config.mining_address_split_json)) return true;
+		if (strlen(val) > 1023) {
+			json_array_append_new(errors, json_string_nocheck("Address Split JSON path is too long"));
+			return false;
+		}
+		strcpy(datum_config.mining_address_split_json, val);
+		datum_api_json_modify_new("mining", "address_split_json", json_string(val));
+		// Reload address split configuration if a path is provided
+		if (val[0] != '\0') {
+			if (!datum_address_split_reload()) {
+				DLOG_WARN("Failed to reload address split configuration after path change");
+				// Continue anyway, it's not critical
+			}
+		}
 	} else if (0 == strcmp(key, "reward_sharing")) {
 		json_t * const config = datum_config.config_json;
 		assert(config);
@@ -1769,6 +1785,13 @@ enum MHD_Result datum_api_answer(void *cls, struct MHD_Connection *connection, c
 			break;
 		}
 		
+		case 's': {
+			if (!strcmp(url, "/api/address_split/reload")) {
+				return datum_api_address_split_reload_endpoint(connection);
+			}
+			break;
+		}
+		
 		default: break;
 	}
 	
@@ -1834,4 +1857,31 @@ int datum_api_init(void) {
 	pthread_create(&pthread_datum_api_thread, NULL, datum_api_thread, NULL);
 	
 	return 0;
+}
+
+// Add this function after the other API endpoint functions
+int datum_api_address_split_reload_endpoint(struct MHD_Connection *connection) {
+	struct MHD_Response *response;
+	const char *json_response;
+	
+	// Check if admin password is required and validate it
+	if (datum_config.api_admin_password[0] && !datum_api_check_admin_password_httponly(connection, datum_api_create_empty_mhd_response)) {
+		return MHD_NO;
+	}
+	
+	// Try to reload the configuration
+	bool success = datum_api_address_split_reload();
+	
+	// Create JSON response
+	if (success) {
+		json_response = "{\"status\":\"success\",\"message\":\"Address split configuration reloaded successfully\"}";
+	} else {
+		json_response = "{\"status\":\"error\",\"message\":\"Failed to reload address split configuration\"}";
+	}
+	
+	// Create response
+	response = MHD_create_response_from_buffer(strlen(json_response), (void*)json_response, MHD_RESPMEM_PERSISTENT);
+	MHD_add_response_header(response, "Content-Type", "application/json");
+	
+	return datum_api_submit_uncached_response(connection, success ? MHD_HTTP_OK : MHD_HTTP_INTERNAL_SERVER_ERROR, response);
 }

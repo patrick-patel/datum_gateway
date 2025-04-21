@@ -107,6 +107,7 @@ typedef struct {
 	char mining_coinbase_tag_primary[64];
 	char mining_coinbase_tag_secondary[64];
 	char mining_save_submitblocks_dir[256];
+	char mining_address_split_json[1024];  // Path to address split configuration JSON
 	int coinbase_unique_id;
 	
 	char api_admin_password[64];

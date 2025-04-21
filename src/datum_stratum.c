@@ -60,6 +60,7 @@
 #include "datum_submitblock.h"
 #include "datum_protocol.h"
 #include "datum_logger.h"
+#include "datum_address_split.h"
 
 T_DATUM_SOCKET_APP *global_stratum_app = NULL;
 
@@ -956,6 +957,68 @@ bool stratum_get_job(const T_DATUM_MINER_DATA * const m, const json_t * const jo
 
 // Format: address%nn[.n][%address%nn[.n][...]]
 const char *datum_stratum_relevant_username(const char *username_s, char * const username_buf, const size_t username_buf_sz, const uint16_t share_rnd) {
+	// First check if this is an address with a configured split
+	if (datum_address_split_exists(username_s)) {
+		DLOG_DEBUG("SPLIT: Found address split configuration for username: %s", username_s);
+		const char *result = datum_address_split_get_recipient(username_s, username_buf, username_buf_sz, share_rnd);
+		if (result != username_s) {
+			DLOG_DEBUG("SPLIT: Username %s was split to recipient: %s", username_s, result);
+		}
+		return result;
+	}
+	
+	// Check if this might be an address.worker format
+	static __thread bool in_recursive_call = false; // Use thread-local storage to track recursion
+	if (!in_recursive_call) {
+		char base_address[256];
+		strncpy(base_address, username_s, sizeof(base_address) - 1);
+		base_address[sizeof(base_address) - 1] = '\0';
+		
+		char *dot_pos = strchr(base_address, '.');
+		if (dot_pos) {
+			*dot_pos = '\0';  // Terminate at the dot
+			
+			// Check if the base address (without worker suffix) has a split configuration
+			if (datum_address_split_exists(base_address)) {
+				DLOG_DEBUG("SPLIT: Found address split configuration for base address: %s (from %s)", 
+				           base_address, username_s);
+				
+				// Set the recursion flag to prevent nested calls
+				in_recursive_call = true;
+				
+				// Get the recipient using the base address
+				const char *base_result = datum_address_split_get_recipient(base_address, username_buf, username_buf_sz, share_rnd);
+				
+				// Reset the flag once we're done
+				in_recursive_call = false;
+				
+				// If we got a different address back, it's a valid split
+				if (base_result != base_address) {
+					// Check if the recipient has a dot already
+					char *recipient_dot = strchr(username_buf, '.');
+					if (recipient_dot) {
+						// Already has a worker suffix, use as is
+						DLOG_DEBUG("SPLIT: Username %s was split using base address %s to recipient: %s",
+						          username_s, base_address, username_buf);
+					} else {
+						// Append the original worker suffix to the new recipient
+						size_t current_len = strlen(username_buf);
+						if (current_len + strlen(dot_pos + 1) + 1 < username_buf_sz) {
+							username_buf[current_len] = '.';
+							strcpy(username_buf + current_len + 1, dot_pos + 1);
+							DLOG_DEBUG("SPLIT: Username %s was split to recipient: %s with worker suffix preserved",
+							          username_s, username_buf);
+						}
+					}
+					return username_buf;
+				}
+			}
+		}
+	}
+	
+	DLOG_DEBUG("SPLIT: No address split found for %s, using username-based splitting", username_s);
+	
+	// If no address-based split is found, fall back to the username-based splitting
 	uint16_t base = 0;
 	int n = 0;
 	
@@ -1239,9 +1302,23 @@ int client_mining_submit(T_DATUM_CLIENT_DATA *c, uint64_t id, json_t *params_obj
 		}
 	}
 	
+	bool already_applied_split = false;  // Flag to track if we've already done an address split
+	
 	if (datum_config.stratum_v1_split_username && strchr(username_s, '%')) {
 		const uint16_t share_rnd = upk_u16le(share_hash, 0);
+		DLOG_DEBUG("SPLIT: Username '%s' contains percentage sign, applying splitting logic with randomness: 0x%04X", 
+		          username_s, share_rnd);
 		username_s = datum_stratum_relevant_username(username_s, username_buf, sizeof(username_buf), share_rnd);
+		DLOG_DEBUG("SPLIT: After splitting, using username: %s", username_s);
+		already_applied_split = true;  // Mark that we've already applied a split
+	} else if (!already_applied_split && (strchr(username_s, '.') || datum_address_split_exists(username_s))) {
+		// Check for address.worker format or direct address split - only if we haven't already done a split
+		const uint16_t share_rnd = upk_u16le(share_hash, 0);
+		DLOG_DEBUG("SPLIT: Username '%s' might have address split configuration, checking with randomness: 0x%04X", 
+		          username_s, share_rnd);
+		username_s = datum_stratum_relevant_username(username_s, username_buf, sizeof(username_buf), share_rnd);
+		DLOG_DEBUG("SPLIT: After address splitting check, using username: %s", username_s);
+		already_applied_split = true;  // Mark that we've already applied a split
 	}
 	
 	// most important thing to do right here is to check if the share is a block

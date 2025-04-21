@@ -60,6 +60,7 @@
 #include "datum_api.h"
 #include "datum_coinbaser.h"
 #include "datum_protocol.h"
+#include "datum_address_split.h"
 
 const char *datum_gateway_config_filename = NULL;
 
@@ -183,6 +184,12 @@ int main(const int argc, const char * const * const argv) {
 	// Initialize logger thread
 	datum_logger_init();
 	
+	// Initialize address split system
+	if (!datum_address_split_init()) {
+		DLOG_WARN("Failed to initialize address split system, continuing without it");
+		// Continue anyway, it's not critical
+	}
+	
 	if (datum_protocol_init()) {
 		DLOG_FATAL("Error initializing the DATUM protocol!");
 		usleep(100000);
@@ -237,6 +244,10 @@ int main(const int argc, const char * const * const argv) {
 			sleep(1); // almost immediately, wait a second for the logger!
 			fflush(stdout);
 			usleep(2000);
+			
+			// Clean up the address split system
+			datum_address_split_cleanup();
+			
 			exit(1);
 		}
 		usleep(500000);

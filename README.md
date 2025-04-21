@@ -130,3 +130,163 @@ Be sure you have failover settings on your miners. As a best practice, when mini
 ## License
 
 The DATUM Gateway (including the DATUM Protocol) is free open source software and released under the terms of the MIT license.  See LICENSE.
+
+## Address-Based Split Feature
+
+DATUM Gateway allows for address-based share splitting where incoming mining shares from a specific address can be automatically distributed to multiple recipient addresses based on configured percentages. This feature is an alternative to the username-based splitting mechanism.
+
+### Setting Up Address Splits
+
+1. Add the path to your address split configuration file in your gateway configuration:
+   ```json
+   {
+     "mining": {
+       "address_split_json": "/path/to/address_splits.json"
+     }
+   }
+   ```
+
+2. Create the JSON configuration file with your split definitions:
+   ```json
+   {
+     "address_splits": {
+       "bc1qsourceaddress": [
+         {
+           "address": "bc1qrecipient1",
+           "percentage": 60
+         },
+         {
+           "address": "bc1qrecipient2",
+           "percentage": 40
+         }
+       ]
+     }
+   }
+   ```
+
+3. The gateway will load this configuration on startup. When mining rewards are earned by "bc1qsourceaddress", they will be automatically split with 60% going to "bc1qrecipient1" and 40% to "bc1qrecipient2".
+
+### Dynamic Configuration Updates
+
+The configuration can be updated without restarting the gateway:
+- The file is automatically reloaded when modified
+- You can manually trigger a reload via the web interface or the API endpoint `/api/address_split/reload`
+
+This feature is useful for managing share distributions in mining operations with multiple participants without requiring miners to configure complex usernames.
+
+## Key Features
+
+- Stratum server interface for Bitcoin miners
+- Connection to DATUM Pool for decentralized mining
+- Username-based share distribution
+- Address-based share distribution (NEW)
+- Automatic difficulty adjustment
+- Web-based administration interface
+
+## Address-Based Split Feature (NEW)
+
+The address-based split feature allows you to define percentage-based distributions for incoming mining shares based on the source Bitcoin address. Unlike the username-based split that requires miners to set up specific percentage split formatting, this feature configures splits on the gateway side using a JSON configuration file.
+
+### Benefits
+
+- Configure splits without requiring miners to modify their usernames
+- Update split configurations without gateway restarts
+- Support unlimited recipients per source address
+- High-performance lookup with hash table implementation
+- Automatic detection of configuration file changes
+
+### Configuration
+
+1. In your DATUM Gateway configuration file, set the path to the address split JSON file:
+
+```json
+{
+  "mining": {
+    "address_split_json": "/path/to/address_splits.json"
+  }
+}
+```
+
+2. Create the address splits JSON file with the following structure:
+
+```json
+{
+  "address_splits": {
+    "bc1qsourceaddress1": [
+      {
+        "address": "bc1qrecipient1",
+        "percentage": 50
+      },
+      {
+        "address": "bc1qrecipient2",
+        "percentage": 30
+      },
+      {
+        "address": "bc1qrecipient3",
+        "percentage": 20
+      }
+    ],
+    "bc1qsourceaddress2": [
+      {
+        "address": "bc1qrecipient4",
+        "percentage": 60
+      },
+      {
+        "address": "bc1qrecipient5",
+        "percentage": 40
+      }
+    ]
+  }
+}
+```
+
+### How It Works
+
+1. Each miner submits shares using their Bitcoin address as the username
+2. When a share is received, DATUM Gateway checks if the address has a defined split configuration
+3. If a split is defined, a recipient is selected based on the configured percentages
+4. The share is credited to the selected recipient address
+5. If no split is defined, the original address receives the credit
+
+### Reloading Configuration
+
+The configuration can be reloaded in two ways without restarting the gateway:
+
+1. **Automatic detection**: The gateway checks for file modifications and automatically reloads the configuration
+2. **API endpoint**: You can trigger a manual reload via the web interface or by calling the API endpoint:
+   ```
+   GET /api/address_split/reload
+   ```
+
+### Example Setup
+
+To route 50% of shares from address `bc1qexample` to address `bc1qrecipient1` and 50% to address `bc1qrecipient2`:
+
+1. Create a JSON file with this configuration:
+   ```json
+   {
+     "address_splits": {
+       "bc1qexample": [
+         {
+           "address": "bc1qrecipient1",
+           "percentage": 50
+         },
+         {
+           "address": "bc1qrecipient2",
+           "percentage": 50
+         }
+       ]
+     }
+   }
+   ```
+
+2. Set the path to this file in your DATUM Gateway configuration
+3. Restart DATUM Gateway or use the reload API endpoint
+
+### Notes
+
+- All Bitcoin addresses (both source and recipients) are validated
+- Percentages must add up to 100% (small variations are automatically normalized)
+- The feature falls back to the existing username split functionality when no address split is configured
+- Configuration changes are applied immediately without requiring a gateway restart
+- You can view and change the configuration file path in the web interface under Advanced settings

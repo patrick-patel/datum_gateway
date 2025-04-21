@@ -202,6 +202,19 @@
 				</div>
 				<div class="setting-row">
 					<div class="flex-row">
+						<label for="mining_address_split_json" class="label">Address Split Configuration File:</label>
+						<input maxlength="1023" name="mining_address_split_json" id="mining_address_split_json" value="${mining_address_split_json}"${*ro}></input>
+					</div>
+					<label for="mining_address_split_json" class="tip">Path to JSON file containing address-based split configurations. Leave empty to disable.</label>
+				</div>
+				<div class="setting-row">
+					<div class="flex-row">
+						<button type="button" id="reload_address_splits" onclick="reloadAddressSplits()"${disabled:*ro}>Reload Address Splits</button>
+					</div>
+					<label class="tip">Reload address split configuration without restarting the gateway.</label>
+				</div>
+				<div class="setting-row">
+					<div class="flex-row">
 						<label for="bitcoind_rpcurl" class="label">bitcoind RPC URL:</label>
 						<input maxlength="128" name="bitcoind_rpcurl" id="bitcoind_rpcurl" value="${bitcoind_rpcurl}"${*ro}></input>
 					</div>
@@ -242,6 +255,32 @@
 			}
 		}
 		reward_sharing_changed();
+		
+		function reloadAddressSplits() {
+			var button = document.getElementById('reload_address_splits');
+			button.disabled = true;
+			button.innerText = 'Reloading...';
+			
+			fetch('/api/address_split/reload', {
+				method: 'GET',
+				credentials: 'same-origin'
+			})
+			.then(response => response.json())
+			.then(data => {
+				if (data.status === 'success') {
+					alert('Address split configuration reloaded successfully.');
+				} else {
+					alert('Failed to reload address split configuration: ' + data.message);
+				}
+			})
+			.catch(error => {
+				alert('Error reloading address split configuration: ' + error);
+			})
+			.finally(() => {
+				button.disabled = false;
+				button.innerText = 'Reload Address Splits';
+			});
+		}
 	</script>
 </body>
 </html>
